@@ -9,6 +9,8 @@
     <color name="summaryColor">#2196F3</color> <!-- Blue -->
     <color name="flashcardColor">#4CAF50</color> <!-- Green -->
     <color name="quizColor">#FF9800</color> <!-- Orange -->
+    <color name="cram_blue">#0013DE</color>
+
 
 
 </resources>

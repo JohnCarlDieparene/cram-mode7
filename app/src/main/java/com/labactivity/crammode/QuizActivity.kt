@@ -1,200 +1,307 @@
-package com.labactivity.crammode
+    package com.labactivity.crammode
 
-import android.content.Intent
-import android.graphics.Color
-import android.os.Bundle
-import android.os.CountDownTimer
-import android.view.View
-import android.widget.*
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+    import android.content.Intent
+    import android.os.Bundle
+    import android.util.Log
+    import android.widget.Toast
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.compose.foundation.layout.*
+    import androidx.compose.foundation.text.KeyboardOptions
+    import androidx.compose.material3.*
+    import androidx.compose.runtime.*
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.platform.LocalContext
+    import androidx.compose.ui.text.input.KeyboardType
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.lifecycleScope
+    import androidx.lifecycle.viewmodel.compose.viewModel
+    import com.labactivity.crammode.model.QuizQuestion
+    import com.labactivity.crammode.utils.QuizUtils
+    import kotlinx.coroutines.launch
+    import kotlinx.coroutines.suspendCancellableCoroutine
+    import retrofit2.Call
+    import retrofit2.Callback
+    import retrofit2.Response
+    import kotlin.coroutines.resume
+    import kotlin.coroutines.resumeWithException
+    import androidx.activity.compose.rememberLauncherForActivityResult
+    import androidx.compose.foundation.rememberScrollState
+    import androidx.activity.result.contract.ActivityResultContracts
+    import android.net.Uri
+import androidx.compose.foundation.verticalScroll
+    import androidx.core.content.FileProvider
+    import java.io.File
+    import android.content.Context
+    import kotlinx.coroutines.CoroutineScope
+    import androidx.compose.material.icons.Icons
+    import androidx.compose.material.icons.automirrored.filled.ArrowBack
+    import androidx.compose.foundation.shape.RoundedCornerShape
+    import androidx.compose.foundation.text.BasicTextField
+    import androidx.compose.foundation.background
+    import androidx.compose.ui.Alignment
+    import androidx.compose.material.icons.filled.Clear
+    import androidx.compose.material.icons.filled.FormatListNumbered
 
-class QuizActivity : AppCompatActivity() {
 
-    private lateinit var questionTextView: TextView
-    private lateinit var optionARadio: RadioButton
-    private lateinit var optionBRadio: RadioButton
-    private lateinit var optionCRadio: RadioButton
-    private lateinit var optionDRadio: RadioButton
-    private lateinit var radioGroup: RadioGroup
-    private lateinit var nextButton: Button
-    private lateinit var submitButton: Button
-    private lateinit var questionCounterText: TextView
-    private lateinit var scoreText: TextView
-    private lateinit var timerTextView: TextView
-
-    private val db = FirebaseFirestore.getInstance()
-    private val auth = FirebaseAuth.getInstance()
-
-    private var quizList: MutableList<Map<String, String>> = mutableListOf()
-    private var currentQuestionIndex = 0
-    private var score = 0
-
-    private var countDownTimer: CountDownTimer? = null
-    private val timePerQuestion: Long = 30_000L // 30 seconds in ms
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_quiz)
-
-        val imageDash3 = findViewById<ImageView>(R.id.imageDash3)
-        val imageUser3 = findViewById<ImageView>(R.id.imageUser3)
-
-        imageDash3.setOnClickListener {
-            val intent = Intent(this, DashboardActivity::class.java)
-            startActivity(intent)
-        }
-
-        imageUser3.setOnClickListener {
-            val intent = Intent(this, Profile::class.java)
-            startActivity(intent)
-        }
-
-        // Initialize UI components
-        questionTextView = findViewById(R.id.questionTextView)
-        optionARadio = findViewById(R.id.optionARadio)
-        optionBRadio = findViewById(R.id.optionBRadio)
-        optionCRadio = findViewById(R.id.optionCRadio)
-        optionDRadio = findViewById(R.id.optionDRadio)
-        radioGroup = findViewById(R.id.optionsRadioGroup)
-        nextButton = findViewById(R.id.nextButton)
-        submitButton = findViewById(R.id.submitButton)
-        questionCounterText = findViewById(R.id.questionCounterText)
-        scoreText = findViewById(R.id.scoreText)
-        timerTextView = findViewById(R.id.timerTextView)
-
-        fetchQuizzes()
-
-        submitButton.setOnClickListener {
-            if (radioGroup.checkedRadioButtonId == -1) {
-                Toast.makeText(this, "Please select an answer", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+    class QuizActivity : ComponentActivity() {
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+                MaterialTheme {
+                    QuizScreen()
+                }
             }
+        }
+    }
 
-            val selectedOption = findViewById<RadioButton>(radioGroup.checkedRadioButtonId).text.toString()
-            val correctAnswer = quizList[currentQuestionIndex]["correctAnswer"]
+    // ----------------- Compose UI -----------------
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+    @Composable
+    fun QuizScreen(
+        vm: QuizActivityVM = viewModel(),
+        context: Context = LocalContext.current,
+        scope: CoroutineScope = rememberCoroutineScope()
+    ) {
+        var numQuestionsInput by remember { mutableStateOf("5") }
+        var language by remember { mutableStateOf("English") }
+        val scrollState = rememberScrollState()
 
-            if (selectedOption.equals(correctAnswer, ignoreCase = true)) {
-                score++
-            }
-
-            countDownTimer?.cancel()
-
-            submitButton.visibility = View.GONE
-            nextButton.visibility = View.VISIBLE
+        // --- Pickers ---
+        val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { scope.launch { extractTextFromImageAsync(context, it) { text -> vm.inputText += if (vm.inputText.isEmpty()) text else "\n$text" } } }
         }
 
-        nextButton.setOnClickListener {
-            countDownTimer?.cancel()
-            currentQuestionIndex++
+        val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { scope.launch { handleFileImport(context, it) { text -> vm.inputText += if (vm.inputText.isEmpty()) text else "\n$text" } } }
+        }
 
-            if (currentQuestionIndex < quizList.size) {
-                showQuestion()
-                nextButton.visibility = View.GONE
-                submitButton.visibility = View.VISIBLE
+        val cameraUri = remember { mutableStateOf<Uri?>(null) }
+        val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+            if (success) {
+                cameraUri.value?.let { scope.launch { extractTextFromImageAsync(context, it) { text -> vm.inputText += if (vm.inputText.isEmpty()) text else "\n$text" } } }
+            }
+        }
+
+        Scaffold(
+            topBar = {
+                SmallTopAppBar(
+                    title = { Text("Quiz Generator") },
+                    navigationIcon = {
+                        IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+            },
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        if (vm.inputText.isBlank()) {
+                            Toast.makeText(context, "No text to generate quiz", Toast.LENGTH_SHORT).show()
+                            return@ExtendedFloatingActionButton
+                        }
+
+                        val n = numQuestionsInput.toIntOrNull()
+                        if (n == null || n !in 1..10) {
+                            Toast.makeText(context, "Enter a number from 1–10", Toast.LENGTH_SHORT).show()
+                            return@ExtendedFloatingActionButton
+                        }
+
+                        scope.launch {
+                            vm.isLoading = true
+                            vm.generateQuiz(n, language)
+                            vm.isLoading = false
+
+                            if (vm.quizQuestions.isNotEmpty()) {
+                                val intent = Intent(context, QuizViewerActivity::class.java)
+                                intent.putParcelableArrayListExtra("quiz_list", ArrayList(vm.quizQuestions))
+                                context.startActivity(intent)
+                            } else {
+                                Toast.makeText(context, "No quiz questions generated", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    content = { Text(if (vm.isLoading) "Generating..." else "Generate Quiz") }
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ---------- Input Card ----------
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Type or import notes", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+
+                        Box {
+                            BasicTextField(
+                                value = vm.inputText,
+                                onValueChange = { vm.inputText = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                                    .padding(12.dp),
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
+                            )
+
+                            if (vm.inputText.isEmpty()) {
+                                Text(
+                                    "Paste notes here, import from PDF or images…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+
+                            if (vm.inputText.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { vm.inputText = "" ; vm.quizQuestions = emptyList() },
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                                ) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear text", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---------- Number & Language Card ----------
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Number of Questions Input (smaller weight)
+                        OutlinedTextField(
+                            value = numQuestionsInput,
+                            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 2) numQuestionsInput = it },
+                            label = { Text("Questions (1–10)") },
+                            leadingIcon = { Icon(Icons.Default.FormatListNumbered, contentDescription = null) },
+                            singleLine = true,
+                            modifier = Modifier.weight(0.4f) // smaller portion of the row
+                        )
+
+                        // Language Dropdown (larger weight)
+                        LanguageDropdown(
+                            selected = language,
+                            onSelected = { language = it },
+                            modifier = Modifier.weight(0.6f) // takes remaining space
+                        )
+                    }
+                }
+
+
+
+                // ---------- Import Chips ----------
+                ImportChips(context, scope) { newText ->
+                    vm.inputText += if (vm.inputText.isEmpty()) newText else "\n$newText"
+                }
+            }
+        }
+    }
+
+
+
+
+    // ----------------- ViewModel -----------------
+    class QuizActivityVM : ViewModel() {
+        var inputText by mutableStateOf("")
+        var quizQuestions by mutableStateOf<List<QuizQuestion>>(emptyList())
+        var isLoading by mutableStateOf(false)
+
+        suspend fun generateQuiz(count: Int, language: String) {
+            if (inputText.isBlank()) return
+
+            isLoading = true
+            try {
+                val request = buildCohereRequest(count, language)
+                val rawResponse = sendChatRequest(request)
+                quizQuestions = QuizUtils.parseQuizQuestions(rawResponse)
+                Log.d("QuizVM", "Parsed ${quizQuestions.size} questions")
+            } catch (e: Exception) {
+                Log.e("QuizVM", "Failed to generate quiz", e)
+            } finally {
+                isLoading = false
+            }
+        }
+
+        private fun buildCohereRequest(count: Int, language: String): ChatRequest {
+            val systemPrompt = if (language == "Filipino") {
+                """
+        Ikaw ay isang AI quiz generator. Gumawa ng eksaktong $count multiple-choice na tanong mula sa ibinigay na teksto.
+        Gamitin ang eksaktong format na ito:
+        Tanong: <question text>
+        A. <choice1>
+        B. <choice2>
+        C. <choice3>
+        D. <choice4>
+        Sagot: <tamang letra A-D>
+        """.trimIndent()
             } else {
-                showQuizOverPage()
+                """
+        You are an AI quiz generator. Generate exactly $count multiple-choice questions from the given text.
+        If the text is not in English, translate it to English first.
+        Use this exact format:
+        Question: <question text>
+        A. <choice1>
+        B. <choice2>
+        C. <choice3>
+        D. <choice4>
+        Answer: <correct letter A-D>
+        """.trimIndent()
             }
+
+            val userPrompt = if (language == "Filipino") {
+                "Gumawa ng $count tanong mula sa tekstong ito:\n\n$inputText\n\nSundin ang format."
+            } else {
+                "Generate $count questions from this text:\n\n$inputText\n\nTranslate to English if needed, and follow the format exactly."
+            }
+
+            return ChatRequest(
+                messages = listOf(
+                    ChatMessage("system", listOf(MessageContent(text = systemPrompt))),
+                    ChatMessage("user", listOf(MessageContent(text = userPrompt)))
+                )
+            )
         }
-    }
 
-    private fun fetchQuizzes() {
-        val userId = auth.currentUser?.uid
-        if (userId == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show()
-            return
-        }
 
-        db.collection("users").document(userId).collection("quizzes")
-            .get()
-            .addOnSuccessListener { documents ->
-                for (doc in documents) {
-                    val quiz = mapOf(
-                        "question" to (doc.getString("question") ?: ""),
-                        "optionA" to (doc.getString("optionA") ?: ""),
-                        "optionB" to (doc.getString("optionB") ?: ""),
-                        "optionC" to (doc.getString("optionC") ?: ""),
-                        "optionD" to (doc.getString("optionD") ?: ""),
-                        "correctAnswer" to (doc.getString("correctAnswer") ?: "")
-                    )
-                    quizList.add(quiz)
-                }
 
-                if (quizList.isNotEmpty()) {
-                    showQuestion()
-                } else {
-                    Toast.makeText(this, "No quizzes found", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-            }
-            .addOnFailureListener {
-                Toast.makeText(this, "Failed to load quizzes", Toast.LENGTH_SHORT).show()
+
+
+        private suspend fun sendChatRequest(request: ChatRequest): String =
+            suspendCancellableCoroutine { cont ->
+                CohereClient.api.chat("Bearer ${BuildConfig.COHERE_API_KEY}", request)
+                    .enqueue(object : retrofit2.Callback<ChatResponse> {
+                        override fun onResponse(call: Call<ChatResponse>, response: Response<ChatResponse>) {
+                            val reply = response.body()?.message?.content
+                                ?.joinToString("\n") { it.text.trim() }
+                                ?.takeIf { it.isNotBlank() } ?: ""
+                            cont.resume(reply)
+                        }
+
+                        override fun onFailure(call: Call<ChatResponse>, t: Throwable) {
+                            cont.resumeWithException(t)
+                        }
+                    })
             }
     }
-
-    private fun showQuestion() {
-        val quiz = quizList[currentQuestionIndex]
-        questionTextView.text = quiz["question"]
-        optionARadio.text = quiz["optionA"]
-        optionBRadio.text = quiz["optionB"]
-        optionCRadio.text = quiz["optionC"]
-        optionDRadio.text = quiz["optionD"]
-        radioGroup.clearCheck()
-
-        questionCounterText.text = "Question ${currentQuestionIndex + 1} of ${quizList.size}"
-        scoreText.text = "Score: $score"
-
-        startTimer()
-    }
-
-    private fun startTimer() {
-        countDownTimer?.cancel()
-
-        countDownTimer = object : CountDownTimer(timePerQuestion, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                val secondsLeft = millisUntilFinished / 1000
-                timerTextView.text = "Time remaining: $secondsLeft sec"
-
-                // Change text color if time is less than or equal to 10 seconds
-                if (secondsLeft <= 10) {
-                    timerTextView.setTextColor(Color.RED)
-                } else {
-                    timerTextView.setTextColor(Color.BLACK)
-                }
-            }
-
-            override fun onFinish() {
-                timerTextView.text = "Time's up!"
-                timerTextView.setTextColor(Color.RED)
-
-                if (currentQuestionIndex < quizList.size - 1) {
-                    currentQuestionIndex++
-                    showQuestion()
-                    nextButton.visibility = View.GONE
-                    submitButton.visibility = View.VISIBLE
-                } else {
-                    showQuizOverPage()
-                }
-            }
-        }.start()
-    }
-
-    private fun showQuizOverPage() {
-        countDownTimer?.cancel()
-
-        val scoreMessage = "Quiz Complete! Your Score: $score/${quizList.size}"
-        val scoreDialog = AlertDialog.Builder(this)
-            .setTitle("Quiz Over")
-            .setMessage(scoreMessage)
-            .setPositiveButton("Go Back to Dashboard") { _, _ ->
-                val intent = Intent(this, DashboardActivity::class.java)
-                startActivity(intent)
-                finish()
-            }
-            .create()
-
-        scoreDialog.show()
-    }
-}

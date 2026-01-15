@@ -1,298 +1,524 @@
 package com.labactivity.crammode
 
-import android.graphics.Color
-import android.os.*
-import android.view.View
-import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
+import com.google.firebase.firestore.FirebaseFirestore
 import com.labactivity.crammode.model.QuizQuestion
-
-class QuizViewerActivity : AppCompatActivity() {
-
-    private lateinit var txtQuestion: TextView
-    private lateinit var txtScore: TextView
-    private lateinit var txtFeedback: TextView
-    private lateinit var txtTimer: TextView
-    private lateinit var progressBar: ProgressBar
-
-    private lateinit var radioGroup: RadioGroup
-    private lateinit var optionA: RadioButton
-    private lateinit var optionB: RadioButton
-    private lateinit var optionC: RadioButton
-    private lateinit var optionD: RadioButton
-
-    private lateinit var btnSubmit: Button
-    private lateinit var btnNext: Button
-
-    private lateinit var btnPrevious: Button
+import kotlinx.coroutines.delay
+import kotlin.random.Random
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.fadeOut
 
 
-    private var quizList: MutableList<QuizQuestion> = mutableListOf()
-    private var currentIndex = 0
-    private var score = 0
-    private var answered = false
-    private var readOnly = false
-    private var quizTimestamp: Long = 0L
-
-    private var countDownTimer: CountDownTimer? = null
-    private var questionTimeMillis: Long = 15000L // default 15s
+class QuizViewerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_quiz_viewer)
 
-        // --- UI Bindings ---
-        txtQuestion = findViewById(R.id.txtQuestion)
-        txtScore = findViewById(R.id.txtScore)
-        txtFeedback = findViewById(R.id.txtFeedback)
-        txtTimer = findViewById(R.id.txtTimer)
-        progressBar = findViewById(R.id.progressBar)
+        val inputText = intent.getStringExtra("inputText") ?: ""
+        val quizList: List<QuizQuestion>? =
+            intent.getParcelableArrayListExtra("quiz_list")
+        val readOnly = intent.getBooleanExtra("readOnly", false)
+        val timePerQuestion = intent.getLongExtra("timePerQuestion", 15000L)
 
-        radioGroup = findViewById(R.id.radioGroup)
-        optionA = findViewById(R.id.optionA)
-        optionB = findViewById(R.id.optionB)
-        optionC = findViewById(R.id.optionC)
-        optionD = findViewById(R.id.optionD)
-
-        btnSubmit = findViewById(R.id.btnSubmit)
-        btnNext = findViewById(R.id.btnNext)
-        btnPrevious = findViewById(R.id.btnPrevious)
-
-        // --- Get intent data ---
-        intent.getParcelableArrayListExtra<QuizQuestion>("quizQuestions")?.let {
-            quizList = ArrayList(it)
-        }
-        readOnly = intent.getBooleanExtra("readOnly", false)
-        quizTimestamp = intent.getLongExtra("timestamp", 0L)
-
-        val selectedTimeOption = intent.getStringExtra("timePerQuestion") ?: "medium"
-        questionTimeMillis = when (selectedTimeOption) {
-            "easy" -> 30000L
-            "medium" -> 15000L
-            "hard" -> 10000L
-            else -> 15000L
+        if (quizList.isNullOrEmpty()) {
+            finish()
+            return
         }
 
-        // --- Initialize quiz ---
-        if (quizList.isNotEmpty()) {
-            updateProgress()
-            showQuestion()
-        } else {
-            txtQuestion.text = "No quiz data found."
-            btnSubmit.isEnabled = false
-            btnNext.isEnabled = false
+        setContent {
+            QuizViewerScreen(
+                quizList = quizList,
+                readOnly = readOnly,
+                questionTimeMillis = timePerQuestion,
+                inputText = inputText,
+                title = if (readOnly) "Quiz History" else "Quiz",
+                onBack = { finish() }
+            )
         }
+    }
+}
 
-        // --- Button listeners ---
-        btnSubmit.setOnClickListener {
-            if (!answered && !readOnly) checkAnswer()
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuizViewerScreen(
+    quizList: List<QuizQuestion>,
+    readOnly: Boolean,
+    questionTimeMillis: Long,
+    inputText: String,
+    title: String = "Quiz",
+    onBack: () -> Unit = {}
+) {
+    var resetKey by remember { mutableStateOf(0) }
+
+    val shuffledQuizList by remember(resetKey) {
+        mutableStateOf(quizList.shuffled())
+    }
+
+
+
+    val totalScore by remember(shuffledQuizList) {
+        derivedStateOf {
+            shuffledQuizList.count { it.userAnswer == it.correctAnswer }
         }
+    }
 
-        btnNext.setOnClickListener {
-            if (currentIndex < quizList.size - 1) {
-                currentIndex++
-                updateProgress()
-                showQuestion()
-            } else {
-                val correctCount = if (readOnly) {
-                    quizList.count { it.userAnswer == it.correctAnswer }
+
+    var currentIndex by remember(resetKey) { mutableStateOf(0) }
+    var showScoreScreen by remember(resetKey) { mutableStateOf(false) }
+
+    var selectedAnswer by remember(resetKey) { mutableStateOf<String?>(null) }
+    var isAnswered by remember(resetKey) { mutableStateOf(false) }
+
+    var timeLeft by remember(resetKey) {
+        mutableStateOf(questionTimeMillis / 1000)
+    }
+    var timerKey by remember(resetKey) { mutableStateOf(0) }
+
+
+    val currentQuestion = shuffledQuizList.getOrNull(currentIndex)
+
+
+    // Pre-fill answers if readOnly
+    LaunchedEffect(currentIndex, readOnly) {
+        currentQuestion?.let { q ->
+            if (readOnly) {
+                selectedAnswer = q.userAnswer
+                isAnswered = true
+            }
+        }
+    }
+
+    // Timer for non-readOnly
+    LaunchedEffect(timerKey) {
+        if (!readOnly && currentQuestion != null) {
+            timeLeft = questionTimeMillis / 1000
+            while (timeLeft > 0 && !isAnswered) {
+                delay(1000)
+                timeLeft--
+            }
+            if (timeLeft == 0L && !isAnswered) {
+                currentQuestion.userAnswer = null
+                isAnswered = true
+                delay(1000)
+                // Move to next or finish
+                if (currentIndex < quizList.size - 1) {
+                    currentIndex++
+                    selectedAnswer = null
+                    isAnswered = false
+                    timerKey++
                 } else {
-                    score
+                    saveQuizToHistory(quizList, inputText)
+                    showScoreScreen = true
                 }
-                val total = quizList.size
-                val percent = (correctCount.toFloat() / total * 100).toInt()
-
-                val builder = androidx.appcompat.app.AlertDialog.Builder(this)
-                builder.setTitle("Quiz Completed")
-                builder.setMessage("You scored $correctCount out of $total\nPercentage: $percent%")
-                builder.setPositiveButton("OK") { dialog, _ ->
-                    dialog.dismiss()
-                    if (!readOnly) saveResultsToFirestore()
-                    finish()
-                }
-                builder.setCancelable(false)
-                builder.show()
             }
-        }
-
-        btnPrevious.setOnClickListener {
-            if (currentIndex > 0) {
-                currentIndex--
-                updateProgress()
-                showQuestion()
-            }
-        }
-
-    }
-
-    // --- Progress update ---
-    private fun updateProgress() {
-        val percent = if (quizList.isNotEmpty()) {
-            ((currentIndex + 1).toFloat() / quizList.size * 100).toInt()
-        } else 0
-        progressBar.progress = percent
-
-        txtScore.text = if (readOnly) {
-            val correctCount = quizList.count { it.userAnswer == it.correctAnswer }
-            "Score: $correctCount / ${quizList.size}"
-        } else {
-            "Score: $score / ${quizList.size}"
         }
     }
 
-    // --- Show question ---
-    private fun showQuestion() {
-        val q = quizList[currentIndex]
-        txtQuestion.text = "Q${currentIndex + 1}: ${q.question}"
-        optionA.text = q.options.getOrElse(0) { "" }
-        optionB.text = q.options.getOrElse(1) { "" }
-        optionC.text = q.options.getOrElse(2) { "" }
-        optionD.text = q.options.getOrElse(3) { "" }
-
-        radioGroup.clearCheck()
-        resetOptionColors()
-        txtFeedback.text = ""
-
-        if (readOnly) {
-            // --- Read-only mode (history) ---
-            setOptionsEnabled(false)
-            btnSubmit.visibility = View.GONE
-            txtTimer.visibility = View.GONE
-
-            // Pre-select user's answer
-            when (q.userAnswer) {
-                optionA.text.toString() -> optionA.isChecked = true
-                optionB.text.toString() -> optionB.isChecked = true
-                optionC.text.toString() -> optionC.isChecked = true
-                optionD.text.toString() -> optionD.isChecked = true
+    if (showScoreScreen) {
+        QuizScoreScreen(
+            score = totalScore,
+            total = quizList.size,
+            onFinish = onBack,
+            onRetry = {
+                shuffledQuizList.forEach { it.userAnswer = null }
+                resetKey++   // 🔀 reshuffle + reset ALL state
             }
 
-            // Feedback coloring
-            when {
-                q.userAnswer == q.correctAnswer -> {
-                    txtFeedback.text = "✅ Your Answer: ${q.userAnswer}"
-                    txtFeedback.setTextColor(Color.GREEN)
-                }
-                q.userAnswer.isNullOrEmpty() -> {
-                    txtFeedback.text = "⚪ No Answer\n✅ Correct Answer: ${q.correctAnswer}"
-                    txtFeedback.setTextColor(Color.GRAY)
-                }
-                else -> {
-                    txtFeedback.text = "❌ Your Answer: ${q.userAnswer}\n✅ Correct Answer: ${q.correctAnswer}"
-                    txtFeedback.setTextColor(Color.RED)
-                }
-            }
 
-            btnNext.visibility = if (currentIndex < quizList.size - 1) View.VISIBLE else View.GONE
-            answered = true
-            btnPrevious.visibility = if (currentIndex > 0) View.VISIBLE else View.GONE
+        )
 
-        } else {
-            // --- Interactive mode (taking quiz) ---
-            setOptionsEnabled(true)
-            answered = false
-            btnSubmit.visibility = View.VISIBLE
-            btnNext.visibility = View.GONE
-            txtTimer.visibility = View.VISIBLE
-            startQuestionTimer()
-        }
+
+        return
     }
 
-    // --- Check answer (interactive mode) ---
-    private fun checkAnswer() {
-        val selectedId = radioGroup.checkedRadioButtonId
-        if (selectedId != -1) {
-            val selectedRadio = findViewById<RadioButton>(selectedId)
-            val selectedAnswer = selectedRadio.text.toString()
-            val currentQuestion = quizList[currentIndex]
+    Column(modifier = Modifier.fillMaxSize()) {
+        // TopAppBar
+        SmallTopAppBar(
+            title = { Text(title) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+            },
+            colors = TopAppBarDefaults.smallTopAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface
+            )
+        )
 
-            // Save user's answer
-            currentQuestion.userAnswer = selectedAnswer
+        currentQuestion?.let { question ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Question header + progress + timer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Q${currentIndex + 1}/${quizList.size}",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        LinearProgressIndicator(
+                            progress = ((currentIndex + 1) / quizList.size.toFloat()),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = Color(0xFF6200EE),
+                            trackColor = Color.LightGray
+                        )
+                    }
 
-            countDownTimer?.cancel()
-            setOptionsEnabled(false)
+                    if (!readOnly) {
+                        val timerFraction by animateFloatAsState(
+                            targetValue = timeLeft.toFloat() / (questionTimeMillis / 1000),
+                            animationSpec = tween(1000),
+                            label = "timerProgress"
+                        )
 
-            // Feedback (simple in interactive mode)
-            if (selectedAnswer == currentQuestion.correctAnswer) {
-                txtFeedback.text = "✅ Correct!"
-                txtFeedback.setTextColor(Color.GREEN)
-                score++
-            } else {
-                txtFeedback.text = "❌ Incorrect!"
-                txtFeedback.setTextColor(Color.RED)
-            }
+                        val timerColor = when {
+                            timerFraction > 0.6f -> Color(0xFF4CAF50)
+                            timerFraction > 0.3f -> Color(0xFFFFC107)
+                            else -> Color(0xFFF44336)
+                        }
 
-            btnSubmit.visibility = View.GONE
-            btnNext.visibility = View.VISIBLE
-            answered = true
-            updateProgress()
-        } else {
-            Toast.makeText(this, "Please select an answer", Toast.LENGTH_SHORT).show()
-        }
-    }
+                        Box(contentAlignment = Alignment.Center) {
 
-    private fun autoSubmit() {
-        val currentQuestion = quizList[currentIndex]
-        currentQuestion.userAnswer = null
-        txtFeedback.text = "⏰ Time's up! Correct answer: ${currentQuestion.correctAnswer}"
-        txtFeedback.setTextColor(Color.RED)
-        setOptionsEnabled(false)
-        btnSubmit.visibility = View.GONE
-        btnNext.visibility = View.VISIBLE
-        answered = true
-        updateProgress()
-    }
+                            CircularProgressIndicator(
+                                progress = timerFraction,
+                                strokeWidth = 6.dp,
+                                color = timerColor,
+                                modifier = Modifier.size(60.dp)
+                            )
 
-    private fun saveResultsToFirestore() {
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null && quizTimestamp != 0L) {
-            val db = Firebase.firestore
-            db.collection("study_history")
-                .whereEqualTo("uid", user.uid)
-                .whereEqualTo("timestamp", quizTimestamp)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    for (doc in snapshot) {
-                        db.collection("study_history")
-                            .document(doc.id)
-                            .update("quiz", quizList)
+                            Text(
+                                text = "${timeLeft}s",
+                                fontWeight = FontWeight.Bold,
+                                color = timerColor
+                            )
+                        }
+
                     }
                 }
+
+                // Question Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Text(
+                        text = question.question,
+                        modifier = Modifier.padding(24.dp),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+
+                    )
+                }
+
+                // Options (with animation)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    question.options.forEach { option ->
+
+                        val targetColor = when {
+                            isAnswered && option == question.correctAnswer -> Color(0xFF4CAF50)
+                            isAnswered && option == selectedAnswer && selectedAnswer != question.correctAnswer -> Color(0xFFF44336)
+                            !isAnswered && option == selectedAnswer -> Color(0xFFBBDEFB)
+                            else -> MaterialTheme.colorScheme.surface
+                        }
+
+                        val animatedBgColor by animateColorAsState(
+                            targetValue = targetColor,
+                            animationSpec = tween(
+                                durationMillis = 180,
+                                easing = LinearOutSlowInEasing
+                            ),
+                            label = "optionColor"
+                        )
+
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(60.dp)
+                                .clickable(enabled = !isAnswered && !readOnly) {
+                                    selectedAnswer = option
+                                },
+                            colors = CardDefaults.cardColors(containerColor = animatedBgColor),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.CenterStart,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            ) {
+                                Text(
+                                    text = option,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (animatedBgColor == MaterialTheme.colorScheme.surface)
+                                        Color.Black else Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+
+
+                // Feedback
+                AnimatedVisibility(
+                    visible = isAnswered || readOnly,
+                    enter = fadeIn(tween(120)) + scaleIn(
+                        initialScale = 0.92f,
+                        animationSpec = tween(120)
+                    ),
+                    exit = fadeOut(tween(80))
+                ) {
+
+                Text(
+                        text = when {
+                            selectedAnswer == question.correctAnswer -> "✅ Correct!"
+                            selectedAnswer == null -> "⏰ Time's up! Correct: ${question.correctAnswer}"
+                            else -> "❌ Incorrect! Correct: ${question.correctAnswer}"
+                        },
+                        color = when {
+                            selectedAnswer == question.correctAnswer -> Color(0xFF4CAF50)
+                            selectedAnswer == null -> Color.Gray
+                            else -> Color(0xFFF44336)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Submit / Next / Finish button
+                Button(
+                    onClick = {
+                        if (!isAnswered) {
+                            isAnswered = true
+                            question.userAnswer = selectedAnswer
+                        } else {
+                            if (currentIndex < quizList.size - 1) {
+                                currentIndex++
+                                selectedAnswer = null
+                                isAnswered = false
+                                timerKey++
+                            } else {
+                                if (!readOnly) saveQuizToHistory(quizList, inputText)
+                                showScoreScreen = true
+                            }
+                        }
+                    },
+                    enabled = if (!isAnswered) selectedAnswer != null else true,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (!isAnswered) "Submit"
+                        else if (currentIndex < quizList.size - 1) "Next"
+                        else "Finish"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuizScoreScreen(
+    score: Int,
+    total: Int,
+    onFinish: () -> Unit,
+    onRetry: (() -> Unit)? = null
+) {
+    val percentage = score.toFloat() / total
+    val showConfetti = percentage >= 0.7f
+    val isPerfect = score == total
+
+    var confettiList by remember(showConfetti) {
+        mutableStateOf(if (showConfetti) generateConfetti() else emptyList())
+    }
+
+    // Confetti animation (3 seconds)
+    LaunchedEffect(showConfetti) {
+        if (!showConfetti) return@LaunchedEffect
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < 3000) {
+            confettiList = confettiList.map { c -> c.copy(y = c.y + c.speed) }
+            delay(16)
         }
     }
 
-    private fun startQuestionTimer() {
-        countDownTimer?.cancel()
-        countDownTimer = object : CountDownTimer(questionTimeMillis, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                txtTimer.text = "Time left: ${millisUntilFinished / 1000}s"
-            }
-            override fun onFinish() {
-                txtTimer.text = "⏰ Time's up!"
-                autoSubmit()
-            }
-        }.start()
-    }
+    // Trophy pulse animation
+    val scale by animateFloatAsState(
+        targetValue = if (isPerfect) 1.1f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "trophyPulse"
+    )
 
-    private fun setOptionsEnabled(enabled: Boolean) {
-        for (i in 0 until radioGroup.childCount) {
-            radioGroup.getChildAt(i).isEnabled = enabled
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        // 🎉 Confetti
+        if (showConfetti) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                confettiList.forEach { c ->
+                    drawCircle(c.color, c.size, Offset(c.x, c.y))
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+            // 🏆 Perfect score badge
+            if (isPerfect) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFD700))
+                        .graphicsLayer(scaleX = scale, scaleY = scale),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🏆", fontSize = MaterialTheme.typography.headlineLarge.fontSize)
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            Text(
+                text = when {
+                    isPerfect -> "Outstanding!"
+                    percentage >= 0.7f -> "Great job!"
+                    else -> "Keep practicing!"
+                },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Text("Your Score", style = MaterialTheme.typography.titleLarge)
+
+            Text(
+                "$score / $total",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = when {
+                    isPerfect -> Color(0xFF4CAF50)
+                    percentage >= 0.7f -> Color(0xFF6200EE)
+                    else -> Color.Gray
+                }
+            )
+
+            Text(
+                "${(percentage * 100).toInt()}%",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(Modifier.height(32.dp))
+
+            // 🔁 Retry button
+            if (onRetry != null) {
+                OutlinedButton(
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Retry Quiz")
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            Button(
+                onClick = onFinish,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Back to Home")
+            }
         }
     }
+}
 
-    private fun resetOptionColors() {
-        val defaultColor = Color.BLACK
-        optionA.setTextColor(defaultColor)
-        optionB.setTextColor(defaultColor)
-        optionC.setTextColor(defaultColor)
-        optionD.setTextColor(defaultColor)
-    }
+data class Confetti(
+    val x: Float,
+    val y: Float,
+    val size: Float,
+    val color: Color,
+    val speed: Float
+)
 
-    override fun onDestroy() {
-        super.onDestroy()
-        countDownTimer?.cancel()
+fun generateConfetti(): List<Confetti> {
+    val colors = listOf(Color.Red, Color.Green, Color.Blue, Color.Yellow, Color.Magenta, Color.Cyan)
+    return List(100) {
+        Confetti(
+            x = Random.nextFloat() * 1080f,  // screen width approximation
+            y = Random.nextFloat() * 1920f,  // screen height approximation
+            size = Random.nextFloat() * 12 + 4,
+            color = colors.random(),
+            speed = Random.nextFloat() * 8 + 2
+        )
     }
+}
+
+// Save to Firebase
+private fun saveQuizToHistory(quizList: List<QuizQuestion>, inputText: String) {
+    val user = FirebaseAuth.getInstance().currentUser ?: return
+    val firestore = FirebaseFirestore.getInstance()
+
+    val history = hashMapOf(
+        "uid" to user.uid,
+        "type" to "quiz",
+        "inputText" to inputText,
+        "quiz" to quizList,
+        "timestamp" to System.currentTimeMillis()
+    )
+
+    firestore.collection("study_history")
+        .add(history)
+        .addOnSuccessListener { Log.d("QuizHistory", "Quiz saved") }
+        .addOnFailureListener { Log.e("QuizHistory", "Save failed", it) }
 }

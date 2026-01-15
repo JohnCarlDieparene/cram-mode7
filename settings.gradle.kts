@@ -1,9 +1,9 @@
 pluginManagement {
     repositories {
+        gradlePluginPortal()
         google()
         mavenCentral()
-        gradlePluginPortal()
-        maven("https://jitpack.io") // ✅ JitPack for CanHub
+        maven("https://jitpack.io") // <- Make sure this is here
     }
 }
 
@@ -12,10 +12,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") // ✅ JitPack for CanHub
+        maven("https://jitpack.io") // <- Must include JitPack here
     }
 }
 
 rootProject.name = "CramMode"
-
 include(":app")

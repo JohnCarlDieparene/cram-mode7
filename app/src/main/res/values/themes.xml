@@ -1,8 +1,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme with ActionBar -->
-    <style name="Base.Theme.CramMode" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here -->
+
+    <!-- Base app theme -->
+    <style name="Base.Theme.CramMode" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.CramMode" parent="Base.Theme.CramMode" />
+
+    <!-- Splash screen theme -->
+    <style name="Theme.CramMode.Splash" parent="Base.Theme.CramMode">
+        <!-- Set the window background to your splash drawable -->
+        <item name="android:windowBackground">@drawable/splash_background</item>
     </style>
 
-    <style name="Theme.CramMode" parent="Base.Theme.CramMode" />
 </resources>

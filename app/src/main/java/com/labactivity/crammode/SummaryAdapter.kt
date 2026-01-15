@@ -74,7 +74,7 @@ class SummaryViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         }
     }
 }
-class SummaryActivity : AppCompatActivity() {
+class SummaryActivityy : AppCompatActivity() {
 
    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
