@@ -14,11 +14,43 @@
       },
       "oauth_client": [
         {
+          "client_id": "849531769547-5dmq2h1ji4m2reluops0ks10tm61m65e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.labactivity.crammode",
+            "certificate_hash": "468c675a3491916f0926436a8811ba96652aef6e"
+          }
+        },
+        {
+          "client_id": "849531769547-7j7n27qk6rsu4lin3ihbrltcid0e45pr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.labactivity.crammode",
+            "certificate_hash": "c62440fafd43775d54c8c16cb88efc2fef9686aa"
+          }
+        },
+        {
           "client_id": "849531769547-7jqkgl6h6jg5ln35s664u805ks48nf3b.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.labactivity.crammode",
             "certificate_hash": "8d3789c092b81f21c49a9eef32446e8596212595"
+          }
+        },
+        {
+          "client_id": "849531769547-dlmu9svvrengidn8o1h60q89athml3vs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.labactivity.crammode",
+            "certificate_hash": "dcb7de03eb4182dc41c79391a09832a159fe221a"
+          }
+        },
+        {
+          "client_id": "849531769547-hre0oltf5q2gj1qt4ppnmvau3ju9kblu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.labactivity.crammode",
+            "certificate_hash": "42543292fa19dfeeebd0a8971db8c0446ae41a93"
           }
         },
         {

@@ -18,6 +18,7 @@ val cloudApiKey = localProperties.getProperty("YOUR_API_KEY") ?: ""
 val cloudApiSecret = localProperties.getProperty("YOUR_API_SECRET") ?: ""
 
 android {
+
     namespace = "com.labactivity.crammode"
     compileSdk = 36 // latest compile SDK
 

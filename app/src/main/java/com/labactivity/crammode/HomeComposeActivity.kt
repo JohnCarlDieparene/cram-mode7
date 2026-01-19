@@ -798,43 +798,30 @@ fun ProfileContent() {
             }
 
             // ---------------- LAST QUIZ SCORE ----------------
-            Card(shape = RoundedCornerShape(16.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Quiz,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Last Quiz Score")
-                    }
 
-                    Text(
-                        stats.lastQuizScore,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            // ---------------- ACTIONS ----------------
             Card(shape = RoundedCornerShape(20.dp)) {
                 Column {
                     ProfileAction(Icons.Default.Settings, "Settings") {
-                        Toast.makeText(
-                            context,
-                            "Settings coming soon",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        context.startActivity(
+                            Intent(context, SettingsActivity::class.java)
+                        )
                     }
                     Divider()
+
+                    ProfileAction(Icons.Default.Info, "About Cram Mode") {
+                        context.startActivity(
+                            Intent(context, AboutActivity::class.java)
+                        )
+                    }
+                    Divider()
+
+                    ProfileAction(Icons.Default.Description, "Privacy Policy") {
+                        context.startActivity(
+                            Intent(context, PrivacyPolicyActivity::class.java)
+                        )
+                    }
+                    Divider()
+
                     ProfileAction(Icons.Default.Logout, "Logout", Color.Red) {
                         auth.signOut()
                         context.startActivity(
