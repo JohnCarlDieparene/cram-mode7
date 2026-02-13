@@ -18,9 +18,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
+
 class SettingsActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MaterialTheme {
                 SettingsScreen(onBack = { finish() })
@@ -31,11 +34,17 @@ class SettingsActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
-
-    var darkModeEnabled by remember { mutableStateOf(false) }
     var remindersEnabled by remember { mutableStateOf(false) }
+
+    // --- AI Preferences state ---
+    var summaryLength by remember { mutableStateOf("Medium") }
+    var quizDifficulty by remember { mutableStateOf("Medium") }
+    var flashcardStyle by remember { mutableStateOf("Q&A") }
+    var aiSuggestionsEnabled by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -56,25 +65,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-
-            // ---------------- APPEARANCE ----------------
-            SettingsSection("Appearance")
-
-            SettingsSwitchItem(
-                icon = Icons.Default.DarkMode,
-                title = "Dark Mode",
-                checked = darkModeEnabled,
-                onCheckedChange = {
-                    darkModeEnabled = it
-                    Toast.makeText(
-                        context,
-                        "Dark Mode coming soon",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            )
-
-            Divider()
 
             // ---------------- STUDY ----------------
             SettingsSection("Study")
@@ -98,18 +88,94 @@ fun SettingsScreen(onBack: () -> Unit) {
             // ---------------- AI ----------------
             SettingsSection("AI & Learning")
 
-            SettingsNavItem(
-                icon = Icons.Default.Psychology,
-                title = "AI Preferences",
-                subtitle = "Summary length, quiz difficulty",
-                onClick = {
-                    Toast.makeText(
-                        context,
-                        "AI preferences coming soon",
-                        Toast.LENGTH_SHORT
-                    ).show()
+            // ---- AI Suggestions Toggle ----
+            SettingsSwitchItem(
+                icon = Icons.Default.AutoFixHigh,
+                title = "AI Suggestions",
+                checked = aiSuggestionsEnabled,
+                onCheckedChange = {
+                    aiSuggestionsEnabled = it
+                    Toast.makeText(context, "AI suggestions ${if (it) "enabled" else "disabled"}", Toast.LENGTH_SHORT).show()
                 }
             )
+
+            // ---- Summary Length ----
+            SettingsDropdownItem(
+                icon = Icons.Default.Article,
+                title = "Summary Length",
+                options = listOf("Short", "Medium", "Long"),
+                selectedOption = summaryLength,
+                onOptionSelected = {
+                    summaryLength = it
+                    Toast.makeText(context, "Summary length: $it", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            // ---- Quiz Difficulty ----
+            SettingsDropdownItem(
+                icon = Icons.Default.Quiz,
+                title = "Quiz Difficulty",
+                options = listOf("Easy", "Medium", "Hard"),
+                selectedOption = quizDifficulty,
+                onOptionSelected = {
+                    quizDifficulty = it
+                    Toast.makeText(context, "Quiz difficulty: $it", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            // ---- Flashcard Style ----
+            SettingsDropdownItem(
+                icon = Icons.Default.Style,
+                title = "Flashcard Style",
+                options = listOf("Q&A", "Fill-in-the-Blank"),
+                selectedOption = flashcardStyle,
+                onOptionSelected = {
+                    flashcardStyle = it
+                    Toast.makeText(context, "Flashcard style: $it", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsDropdownItem(
+    icon: ImageVector,
+    title: String,
+    options: List<String>,
+    selectedOption: String,
+    onOptionSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null)
+            Spacer(Modifier.width(16.dp))
+            Text(title, modifier = Modifier.weight(1f))
+            Text(selectedOption, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onOptionSelected(option)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
@@ -177,4 +243,3 @@ fun SettingsSwitchItem(
         )
     }
 }
-

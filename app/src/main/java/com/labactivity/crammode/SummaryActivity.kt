@@ -42,6 +42,12 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+
 class SummaryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,13 +146,21 @@ fun SummaryScreen() {
                                     length = length.lowercase(),
                                     format = format.lowercase()
                                 )
-                                summary = result
                                 isLoading = false
 
                                 if (result.isNotBlank() && !result.startsWith("Error")) {
                                     saveSummaryHistory(inputText.text, result)
+
+                                    // Navigate to SummaryViewerActivity
+                                    val intent = Intent(context, SummaryViewerActivity::class.java).apply {
+                                        putExtra("summary_text", result)
+                                    }
+                                    context.startActivity(intent)
+                                } else {
+                                    Toast.makeText(context, "Failed to generate summary", Toast.LENGTH_SHORT).show()
                                 }
                             }
+
                         }
                     },
 
@@ -323,38 +337,112 @@ fun ImportChips(
     scope: CoroutineScope,
     onTextExtracted: (String) -> Unit
 ) {
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { scope.launch { extractTextFromImageAsync(context, it, onTextExtracted) } }
-    }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { scope.launch { handleFileImport(context, it, onTextExtracted) } }
-    }
-    val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) cameraImageUri.value?.let { scope.launch { extractTextFromImageAsync(context, it, onTextExtracted) } }
-    }
+    /* ---------------- PERMISSION LAUNCHERS ---------------- */
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    val cameraPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    val galleryPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                Toast.makeText(context, "Gallery permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    /* ---------------- ACTIVITY RESULT LAUNCHERS ---------------- */
+
+    val imagePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { scope.launch { extractTextFromImageAsync(context, it, onTextExtracted) } }
+        }
+
+    val filePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { scope.launch { handleFileImport(context, it, onTextExtracted) } }
+        }
+
+    val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+            if (success) {
+                cameraImageUri.value?.let {
+                    scope.launch { extractTextFromImageAsync(context, it, onTextExtracted) }
+                }
+            }
+        }
+
+    /* ---------------- UI ---------------- */
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+
+        // 📸 CAMERA
         AssistChip(
             onClick = {
-                cameraImageUri.value = createImageUri(context)
-                cameraImageUri.value?.let { cameraLauncher.launch(it) }
+                if (context.hasPermission(Manifest.permission.CAMERA)) {
+                    cameraImageUri.value = createImageUri(context)
+                    cameraLauncher.launch(cameraImageUri.value)
+                } else {
+                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
             },
             label = { Text("Camera") },
             leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) }
         )
+
+        // 🖼️ IMAGE (Gallery)
         AssistChip(
-            onClick = { imagePicker.launch("image/*") },
+            onClick = {
+                val permission = getImagePermission()
+                if (context.hasPermission(permission)) {
+                    imagePicker.launch("image/*")
+                } else {
+                    galleryPermissionLauncher.launch(permission)
+                }
+            },
             label = { Text("Image") },
             leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) }
         )
+
+        // 📄 FILE (PDF / DOCX)
         AssistChip(
-            onClick = { filePicker.launch(arrayOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) },
+            onClick = {
+                val permission = getImagePermission()
+                if (context.hasPermission(permission)) {
+                    filePicker.launch(
+                        arrayOf(
+                            "application/pdf",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                    )
+                } else {
+                    galleryPermissionLauncher.launch(permission)
+                }
+            },
             label = { Text("File") },
             leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) }
         )
     }
 }
+
+
+fun Context.hasPermission(permission: String): Boolean =
+    ContextCompat.checkSelfPermission(this, permission) ==
+            PackageManager.PERMISSION_GRANTED
+
+fun getImagePermission(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        Manifest.permission.READ_MEDIA_IMAGES
+    else
+        Manifest.permission.READ_EXTERNAL_STORAGE
+
 
 // ------------------ Helper Functions ------------------
 
@@ -438,34 +526,32 @@ suspend fun sendSummaryRequestAsync(
         // --------------------------
         // Step 2: Create system prompt based on format and language
         // --------------------------
-        val systemPrompt = when(format.lowercase()) {
+        val systemPrompt = when (format.lowercase()) {
             "bullet" -> if (language.lowercase() == "filipino") {
-                "Ikaw ay isang AI study assistant. Buodin ang ibinigay na teksto bilang **bullet points lamang**, $lengthInstruction. Huwag maglagay ng anumang panimulang teksto o markdown."
+                "Ikaw ay isang AI study assistant. Buodin ang ibinigay na teksto gamit ang bullet points lamang, $lengthInstruction, na nakatuon sa mga pangunahing konsepto, mahahalagang ideya, at mahahalagang detalye. Huwag maglagay ng panimulang teksto o markdown."
             } else {
-                "You are an AI study assistant. Summarize the given text as **bullet points only**, $lengthInstruction. Do NOT include any introductory text or markdown."
+                "You are an AI study assistant. Summarize the given text as bullet points only, $lengthInstruction, focusing on the main concepts, key ideas, and essential details. Do not include any introductory text or markdown."
             }
+
             else -> if (language.lowercase() == "filipino") {
-                "Ikaw ay isang AI study assistant. Buodin ang ibinigay na teksto sa malinaw at maikling paraan bilang **isang talata**, $lengthInstruction."
+                "Ikaw ay isang AI study assistant. Buodin ang ibinigay na teksto sa malinaw at maikling paraan bilang isang talata, $lengthInstruction, na binibigyang-diin ang mga pangunahing konsepto at mahahalagang ideya."
             } else {
-                "You are an AI study assistant. Summarize the given text clearly and concisely as **a paragraph**, $lengthInstruction."
+                "You are an AI study assistant. Summarize the given text clearly and concisely as a single paragraph, $lengthInstruction, emphasizing the main concepts and essential ideas."
             }
         }
+
+
 
         // --------------------------
         // Step 3: Create user prompt
         // --------------------------
-        val userPrompt = when(format.lowercase()) {
-            "bullet" -> if (language.lowercase() == "filipino") {
-                "Buodin ang tekstong ito sa bullet points lamang:\n$input"
-            } else {
-                "Summarize this text in bullet points only:\n$input"
-            }
-            else -> if (language.lowercase() == "filipino") {
-                "Buodin ang tekstong ito sa isang talata:\n$input"
-            } else {
-                "Summarize this text in a paragraph:\n$input"
-            }
+        val userPrompt = if (language.lowercase() == "filipino") {
+            "Buodin ang sumusunod na teksto:\n$input"
+        } else {
+            "Summarize the following text:\n$input"
         }
+
+
 
         // --------------------------
         // Step 4: Prepare request to Cohere API

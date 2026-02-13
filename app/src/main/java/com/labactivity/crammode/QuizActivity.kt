@@ -68,21 +68,8 @@ import androidx.compose.foundation.verticalScroll
         var language by remember { mutableStateOf("English") }
         val scrollState = rememberScrollState()
 
-        // --- Pickers ---
-        val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let { scope.launch { extractTextFromImageAsync(context, it) { text -> vm.inputText += if (vm.inputText.isEmpty()) text else "\n$text" } } }
-        }
 
-        val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            uri?.let { scope.launch { handleFileImport(context, it) { text -> vm.inputText += if (vm.inputText.isEmpty()) text else "\n$text" } } }
-        }
 
-        val cameraUri = remember { mutableStateOf<Uri?>(null) }
-        val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-            if (success) {
-                cameraUri.value?.let { scope.launch { extractTextFromImageAsync(context, it) { text -> vm.inputText += if (vm.inputText.isEmpty()) text else "\n$text" } } }
-            }
-        }
 
         Scaffold(
             topBar = {
@@ -247,34 +234,41 @@ import androidx.compose.foundation.verticalScroll
         private fun buildCohereRequest(count: Int, language: String): ChatRequest {
             val systemPrompt = if (language == "Filipino") {
                 """
-        Ikaw ay isang AI quiz generator. Gumawa ng eksaktong $count multiple-choice na tanong mula sa ibinigay na teksto.
-        Gamitin ang eksaktong format na ito:
-        Tanong: <question text>
-        A. <choice1>
-        B. <choice2>
-        C. <choice3>
-        D. <choice4>
-        Sagot: <tamang letra A-D>
-        """.trimIndent()
+Ikaw ay isang AI study assistant na gumagawa ng multiple-choice quiz upang suportahan ang aktibong pag-alala (active recall).
+Kung ang ibinigay na teksto ay hindi nasa Filipino, isalin muna ito sa Filipino bago bumuo ng mga tanong.
+Gumawa ng eksaktong $count tanong batay sa mga pangunahing konsepto at mahahalagang ideya mula sa teksto.
+
+Gamitin ang eksaktong format na ito:
+Tanong: <teksto ng tanong>
+A. <pagpipilian 1>
+B. <pagpipilian 2>
+C. <pagpipilian 3>
+D. <pagpipilian 4>
+Sagot: <tamang letra A-D>
+""".trimIndent()
             } else {
                 """
-        You are an AI quiz generator. Generate exactly $count multiple-choice questions from the given text.
-        If the text is not in English, translate it to English first.
-        Use this exact format:
-        Question: <question text>
-        A. <choice1>
-        B. <choice2>
-        C. <choice3>
-        D. <choice4>
-        Answer: <correct letter A-D>
-        """.trimIndent()
+You are an AI study assistant that generates multiple-choice quizzes to support active recall.
+If the provided text is not in English, translate it to English first before generating the questions.
+Create exactly $count questions based on the main concepts and important ideas from the text.
+
+Use this exact format:
+Question: <question text>
+A. <choice 1>
+B. <choice 2>
+C. <choice 3>
+D. <choice 4>
+Answer: <correct letter A-D>
+""".trimIndent()
             }
 
+
             val userPrompt = if (language == "Filipino") {
-                "Gumawa ng $count tanong mula sa tekstong ito:\n\n$inputText\n\nSundin ang format."
+                "Gumawa ng $count tanong mula sa sumusunod na teksto:\n\n$inputText"
             } else {
-                "Generate $count questions from this text:\n\n$inputText\n\nTranslate to English if needed, and follow the format exactly."
+                "Generate $count questions from the following text:\n\n$inputText"
             }
+
 
             return ChatRequest(
                 messages = listOf(

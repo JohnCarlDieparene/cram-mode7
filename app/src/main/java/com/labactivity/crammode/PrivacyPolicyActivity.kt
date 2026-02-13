@@ -3,14 +3,17 @@ package com.labactivity.crammode
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -55,14 +58,18 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.labelMedium
             )
 
-            SectionTitle("1. Introduction")
-            SectionText(
-                "Cram Mode respects your privacy. This Privacy Policy explains how information is collected, used, and protected when using the Cram Mode mobile application."
+            SectionCard(
+                title = "1. Introduction",
+                text = """
+Cram Mode respects your privacy. This Privacy Policy explains how information is collected, used, and protected when using the Cram Mode mobile application.
+
+Cram Mode leverages AI to generate summaries, flashcards, and quizzes, with support for Tagalog translation to enhance learning accessibility.
+                """.trimIndent()
             )
 
-            SectionTitle("2. Information We Collect")
-            SectionText(
-                """
+            SectionCard(
+                title = "2. Information We Collect",
+                text = """
 We may collect the following information:
 • Account information (name, email address, profile photo) through Google Sign-In
 • Study-related data such as summaries, flashcards, quizzes, and study history
@@ -70,9 +77,9 @@ We may collect the following information:
                 """.trimIndent()
             )
 
-            SectionTitle("3. How We Use Your Information")
-            SectionText(
-                """
+            SectionCard(
+                title = "3. How We Use Your Information",
+                text = """
 Your information is used to:
 • Provide and personalize study features
 • Save your study progress and history
@@ -81,14 +88,16 @@ Your information is used to:
                 """.trimIndent()
             )
 
-            SectionTitle("4. Data Storage and Security")
-            SectionText(
-                "Cram Mode uses Firebase services to securely store user data. Reasonable security measures are implemented to protect your information from unauthorized access."
+            SectionCard(
+                title = "4. Data Storage and Security",
+                text = """
+Cram Mode uses Firebase services to securely store user data. Reasonable security measures are implemented to protect your information from unauthorized access.
+                """.trimIndent()
             )
 
-            SectionTitle("5. Third-Party Services")
-            SectionText(
-                """
+            SectionCard(
+                title = "5. Third-Party Services",
+                text = """
 Cram Mode uses third-party services such as:
 • Firebase Authentication and Firestore
 • AI services for generating summaries, flashcards, and quizzes
@@ -97,19 +106,28 @@ These services may process data in accordance with their own privacy policies.
                 """.trimIndent()
             )
 
-            SectionTitle("6. Data Retention")
-            SectionText(
-                "Your study data is retained only as long as your account is active. You may delete your data by clearing your study history or logging out of the application."
+            SectionCard(
+                title = "6. Data Retention",
+                text = """
+Your study data is retained only as long as your account is active. You can delete your data at any time by clearing your study history or logging out of the application.
+                """.trimIndent()
             )
 
-            SectionTitle("7. Changes to This Policy")
-            SectionText(
-                "This Privacy Policy may be updated from time to time. Any changes will be reflected within the application."
+            SectionCard(
+                title = "7. Changes to This Policy",
+                text = """
+This Privacy Policy may be updated from time to time. Any changes will be reflected within the application.
+                """.trimIndent()
             )
 
-            SectionTitle("8. Contact")
-            SectionText(
-                "If you have questions regarding this Privacy Policy, please contact the developer through the Cram Mode project repository or academic institution."
+            SectionCard(
+                title = "8. Contact",
+                text = """
+If you have questions regarding this Privacy Policy, you can contact the developer through the Cram Mode project repository or academic institution.
+
+Contact:
+                """.trimIndent(),
+                clickableText = "johncarl.dieparene@neu.edu.ph"
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -124,19 +142,34 @@ These services may process data in accordance with their own privacy policies.
 }
 
 @Composable
-fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold
-    )
-}
+fun SectionCard(title: String, text: String, clickableText: String? = null) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 20.sp
+            )
 
-@Composable
-fun SectionText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        lineHeight = 20.sp
-    )
+            clickableText?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable { /* open email intent */ }
+                )
+            }
+        }
+    }
 }

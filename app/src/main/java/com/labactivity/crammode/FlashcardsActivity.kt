@@ -51,26 +51,14 @@ class FlashcardsActivity : ComponentActivity() {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
 
-                // Launchers for importing files
-                val galleryLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.GetContent()
-                ) { uri ->
-                    uri?.let { textFromUri(context, it)?.let { t -> vm.inputText += if (vm.inputText.isEmpty()) t else "\n$t" } }
-                }
 
-                val pdfLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.GetContent()
-                ) { uri ->
-                    uri?.let { textFromUri(context, it)?.let { t -> vm.inputText += if (vm.inputText.isEmpty()) t else "\n$t" } }
-                }
+
 
                 FlashcardsScreen(
                     vm = vm,
                     context = context,
                     scope = scope,
-                    onCameraClick = { Toast.makeText(context, "Camera import not implemented yet", Toast.LENGTH_SHORT).show() },
-                    onGalleryClick = { galleryLauncher.launch("text/*") },
-                    onPdfClick = { pdfLauncher.launch("application/pdf") }
+
                 )
             }
         }
@@ -88,11 +76,9 @@ class FlashcardsActivity : ComponentActivity() {
 fun FlashcardsScreen(
     vm: FlashcardActivityVM,
     context: Context,
-    scope: CoroutineScope,
-    onCameraClick: () -> Unit,
-    onGalleryClick: () -> Unit,
-    onPdfClick: () -> Unit
-) {
+    scope: CoroutineScope
+)
+ {
     var flashcardCountInput by remember { mutableStateOf("5") }
     var language by remember { mutableStateOf("English") }
     val scrollState = rememberScrollState()
@@ -251,7 +237,7 @@ fun LanguageDropdown(selected: String, onSelected: (String) -> Unit, modifier: M
             value = selected,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Language") },
+            label = { Text("Language Output") },
             leadingIcon = { Icon(Icons.Default.Language, contentDescription = null) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier.menuAnchor().fillMaxWidth(),
@@ -305,20 +291,31 @@ class FlashcardRepository {
     ): String =
         withContext(Dispatchers.IO) {
             try {
-                val systemPrompt = "You are an AI tutor generating flashcards."
+                val systemPrompt =
+                    "You are an AI study assistant that creates flashcards to support active recall and efficient review."
+
                 val userPrompt = """
-Create exactly $count flashcards from the following text.
-⚠️ IMPORTANT: Strict formatting rules:
-1. Each flashcard must start with "Q:" on a **new line**, followed by the question.
-2. The answer must start with "A:" on the **next line**.
-3. Do NOT combine multiple Q&A into one flashcard.
-4. Do not add numbering, extra text, or punctuation outside Q: and A:.
-5. Only generate exactly $count flashcards.
-6. Write in $language.
+Create exactly $count flashcards based on the **key concepts and important ideas** from the text below.
+
+Strict formatting rules:
+1. Each flashcard must start with "Q:" on a NEW line, followed by a clear and concise question.
+2. The answer must start with "A:" on the NEXT line and directly answer the question.
+3. Each Q&A pair must represent ONE flashcard only.
+4. Do NOT merge multiple questions or answers.
+5. Do NOT add numbering, headings, or extra explanations.
+6. Generate EXACTLY $count flashcards.
+7. Write in $language.
+
+Focus on:
+- Main concepts
+- Definitions
+- Relationships between ideas
+- Important facts useful for review
 
 Text:
 $input
 """.trimIndent()
+
 
 
                 val request = ChatRequest(

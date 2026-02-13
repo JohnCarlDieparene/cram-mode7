@@ -406,11 +406,12 @@ fun HistoryCard(item: StudyHistory, context: android.content.Context, onDelete: 
             .fillMaxWidth()
             .clickable {
                 when (item.type) {
-                    "summary" -> androidx.appcompat.app.AlertDialog.Builder(context)
-                        .setTitle("Summary")
-                        .setMessage(item.resultText)
-                        .setPositiveButton("Close", null)
-                        .show()
+                    "summary" -> context.startActivity(
+                        Intent(context, SummaryViewerActivity::class.java).apply {
+                            putExtra("summary_text", item.resultText)
+                        }
+                    )
+
                     "flashcards" -> context.startActivity(
                         Intent(context, FlashcardViewerActivity::class.java).apply {
                             putParcelableArrayListExtra(
@@ -597,8 +598,12 @@ data class ProfileStats(
     val summaries: Int = 0,
     val flashcards: Int = 0,
     val quizzes: Int = 0,
-    val lastQuizScore: String = "—"
+    val lastQuizScore: String = "—",
+    val bestQuizScore: String = "—",
+    val averageQuizScore: String = "—",
+    val streakDays: Int = 0
 )
+
 
 @Composable
 fun ProfileContent() {
@@ -630,27 +635,32 @@ fun ProfileContent() {
                 var summaries = 0
                 var flashcards = 0
                 var quizzes = 0
-                var lastQuizScore = "—"
 
-                // ✅ Get latest quiz
+                // --- Get all quiz documents ---
                 val quizDocs = result.documents
                     .filter { it.getString("type") == "quiz" }
                     .sortedByDescending { it.getLong("timestamp") ?: 0L }
 
-                if (quizDocs.isNotEmpty()) {
-                    val latestQuiz = quizDocs.first()
-                        .toObject(StudyHistory::class.java)
-                        ?.quiz ?: emptyList()
+                // --- Last / Best / Average ---
+                var lastQuizScore = "0%"
+                var bestQuizScore = "0%"
+                var averageQuizScore = "0%"
 
-                    if (latestQuiz.isNotEmpty()) {
-                        val correct = latestQuiz.count {
-                            it.userAnswer == it.correctAnswer
-                        }
-                        lastQuizScore = "$correct / ${latestQuiz.size}"
+                if (quizDocs.isNotEmpty()) {
+                    val scores = quizDocs.mapNotNull { doc ->
+                        val quiz = doc.toObject(StudyHistory::class.java)?.quiz ?: emptyList()
+                        if (quiz.isEmpty()) null
+                        else quiz.count { it.userAnswer == it.correctAnswer }.toFloat() / quiz.size.toFloat() * 100
+                    }
+
+                    if (scores.isNotEmpty()) {
+                        lastQuizScore = "${scores.first().toInt()}%"
+                        bestQuizScore = "${scores.maxOrNull()?.toInt() ?: 0}%"
+                        averageQuizScore = "${(scores.sum() / scores.size).toInt()}%"
                     }
                 }
 
-                // ✅ Count study types
+                // --- Count study types ---
                 for (doc in result.documents) {
                     when (doc.getString("type")) {
                         "summary" -> summaries++
@@ -663,7 +673,9 @@ fun ProfileContent() {
                     summaries = summaries,
                     flashcards = flashcards,
                     quizzes = quizzes,
-                    lastQuizScore = lastQuizScore
+                    lastQuizScore = lastQuizScore,
+                    bestQuizScore = bestQuizScore,
+                    averageQuizScore = averageQuizScore
                 )
 
                 isLoading = false
@@ -674,6 +686,8 @@ fun ProfileContent() {
                 isRefreshing = false
             }
     }
+
+
 
     LaunchedEffect(currentUser?.uid) {
         loadStats()
@@ -781,32 +795,52 @@ fun ProfileContent() {
 
             // ---------------- STATS ----------------
             Card(shape = RoundedCornerShape(20.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (isLoading) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                     } else {
-                        ProfileStat("Summaries", stats.summaries.toString())
-                        ProfileStat("Flashcards", stats.flashcards.toString())
-                        ProfileStat("Quizzes", stats.quizzes.toString())
+                        // Row 1: Summaries / Flashcards / Quizzes
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            ProfileStat("Summaries", stats.summaries.toString())
+                            ProfileStat("Flashcards", stats.flashcards.toString())
+                            ProfileStat("Quizzes", stats.quizzes.toString())
+                        }
+
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+// Row 2: Last / Best / Average (colored)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ProfileStat("Last Quiz", stats.lastQuizScore)
+                            ProfileStat("Best Quiz", stats.bestQuizScore)
+                            ProfileStat("Average", stats.averageQuizScore)
+                        }
+
+
+
+
                     }
                 }
             }
 
-            // ---------------- LAST QUIZ SCORE ----------------
+
+
 
             Card(shape = RoundedCornerShape(20.dp)) {
                 Column {
-                    ProfileAction(Icons.Default.Settings, "Settings") {
-                        context.startActivity(
-                            Intent(context, SettingsActivity::class.java)
-                        )
-                    }
-                    Divider()
+                  //  ProfileAction(Icons.Default.Settings, "Settings") {
+                    //    context.startActivity(
+                      //      Intent(context, SettingsActivity::class.java)
+                    //      Intent(context, SettingsActivity::class.java)    )
+                    //      Intent(context, SettingsActivity::class.java) }
+                    //      Intent(context, SettingsActivity::class.java)  Divider()
 
                     ProfileAction(Icons.Default.Info, "About Cram Mode") {
                         context.startActivity(
@@ -857,11 +891,32 @@ fun RecentActivityItem(title: String, subtitle: String, onClick: () -> Unit = {}
 
 @Composable
 fun ProfileStat(title: String, value: String) {
+    val displayColor = if (title.contains("Quiz") && value.endsWith("%")) {
+        val percent = value.removeSuffix("%").toIntOrNull() ?: 0
+        when {
+            percent >= 80 -> Color(0xFF4CAF50)      // Green
+            percent >= 50 -> Color(0xFFFFC107)      // Yellow
+            else -> Color(0xFFF44336)               // Red
+        }
+    } else {
+        MaterialTheme.colorScheme.onSurface // Neutral for summaries/flashcards/quizzes
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge.copy(color = displayColor),
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            title,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
+
+
 
 @Composable
 fun ProfileAction(icon: ImageVector, title: String, textColor: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {

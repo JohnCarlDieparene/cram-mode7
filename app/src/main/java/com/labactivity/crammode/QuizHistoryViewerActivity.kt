@@ -127,7 +127,7 @@ fun QuizHistoryViewerScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .height(70.dp),
                         colors = CardDefaults.cardColors(containerColor = bgColor),
                         shape = RoundedCornerShape(12.dp),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

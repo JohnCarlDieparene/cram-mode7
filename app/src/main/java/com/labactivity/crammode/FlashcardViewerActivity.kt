@@ -61,6 +61,9 @@ fun FlashcardViewerScreen(
     title: String,
     onBack: () -> Unit
 ) {
+    // Track total drag for swipe
+    var totalDrag by remember { mutableStateOf(0f) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -133,11 +136,21 @@ fun FlashcardViewerScreen(
                         .clip(RoundedCornerShape(24.dp))
                         .background(cardBrush)
                         .pointerInput(Unit) {
-                            detectHorizontalDragGestures { _, dragAmount ->
-                                if (dragAmount < -50) vm.next()
-                                if (dragAmount > 50) vm.prev()
-                            }
+                            detectHorizontalDragGestures(
+                                onHorizontalDrag = { change, dragAmount ->
+                                    totalDrag += dragAmount
+                                },
+                                onDragEnd = {
+                                    if (totalDrag < -150f) vm.next()    // swipe left
+                                    else if (totalDrag > 150f) vm.prev() // swipe right
+                                    totalDrag = 0f
+                                },
+                                onDragCancel = {
+                                    totalDrag = 0f
+                                }
+                            )
                         }
+
                         .clickable { vm.flip() }
                         .graphicsLayer {
                             rotationY = rotation
@@ -206,6 +219,7 @@ fun FlashcardViewerScreen(
         }
     }
 }
+
 
 // -------------------- VIEWMODEL --------------------
 class FlashcardViewerVM : ViewModel() {

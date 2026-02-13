@@ -3,12 +3,24 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.labactivity.crammode">
 
-    <!-- Required permissions -->
+    <!-- Internet (AI APIs, Firebase, etc.) -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Camera -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Gallery access (Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- Gallery access (Android 12 and below) -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Camera is optional (tablets / emulators without camera) -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -22,8 +34,6 @@
         tools:replace="android:fullBackupContent"
         tools:targetApi="31">
 
-
-
         <!-- Splash Screen (Launcher) -->
         <activity
             android:name=".SplashActivity"
@@ -34,8 +44,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-
-
 
         <!-- App Activities -->
         <activity android:name=".AuthComposeActivity" android:exported="true"/>
@@ -53,20 +61,14 @@
         <activity android:name=".FlashcardsActivity" />
         <activity android:name=".QuizViewerActivity" />
         <activity android:name=".SettingsActivity" />
+        <activity android:name=".SummaryViewerActivity" />
 
-
-
-
-
-
-
-
-        <!-- Fonts -->
+        <!-- Preloaded fonts -->
         <meta-data
             android:name="preloaded_fonts"
             android:resource="@array/preloaded_fonts" />
 
-        <!-- FileProvider for camera and gallery access -->
+        <!-- FileProvider (Camera & Gallery) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.labactivity.crammode.fileprovider"

@@ -5,6 +5,11 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,36 +22,42 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.labactivity.crammode.model.QuizQuestion
 import kotlinx.coroutines.delay
 import kotlin.random.Random
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.fadeOut
 
-
+// -------------------- ACTIVITY --------------------
 class QuizViewerActivity : ComponentActivity() {
+
+    private val QuizLightColors = lightColorScheme(
+        primary = Color(0xFF6200EE),
+        onPrimary = Color.White,
+        secondary = Color(0xFF03A9F4),
+        onSecondary = Color.White,
+        background = Color(0xFFF7F7F7),
+        onBackground = Color.Black,
+        surface = Color.White,
+        onSurface = Color.Black,
+        error = Color(0xFFF44336),
+        onError = Color.White
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val inputText = intent.getStringExtra("inputText") ?: ""
-        val quizList: List<QuizQuestion>? =
-            intent.getParcelableArrayListExtra("quiz_list")
+        val quizList: List<QuizQuestion>? = intent.getParcelableArrayListExtra("quiz_list")
         val readOnly = intent.getBooleanExtra("readOnly", false)
         val timePerQuestion = intent.getLongExtra("timePerQuestion", 15000L)
 
@@ -56,18 +67,24 @@ class QuizViewerActivity : ComponentActivity() {
         }
 
         setContent {
-            QuizViewerScreen(
-                quizList = quizList,
-                readOnly = readOnly,
-                questionTimeMillis = timePerQuestion,
-                inputText = inputText,
-                title = if (readOnly) "Quiz History" else "Quiz",
-                onBack = { finish() }
-            )
+            MaterialTheme(
+                colorScheme = QuizLightColors,
+
+            ) {
+                QuizViewerScreen(
+                    quizList = quizList,
+                    readOnly = readOnly,
+                    questionTimeMillis = timePerQuestion,
+                    inputText = inputText,
+                    title = if (readOnly) "Quiz History" else "Quiz",
+                    onBack = { finish() }
+                )
+            }
         }
     }
 }
 
+// -------------------- SCREEN --------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizViewerScreen(
@@ -84,14 +101,11 @@ fun QuizViewerScreen(
         mutableStateOf(quizList.shuffled())
     }
 
-
-
     val totalScore by remember(shuffledQuizList) {
         derivedStateOf {
             shuffledQuizList.count { it.userAnswer == it.correctAnswer }
         }
     }
-
 
     var currentIndex by remember(resetKey) { mutableStateOf(0) }
     var showScoreScreen by remember(resetKey) { mutableStateOf(false) }
@@ -99,14 +113,10 @@ fun QuizViewerScreen(
     var selectedAnswer by remember(resetKey) { mutableStateOf<String?>(null) }
     var isAnswered by remember(resetKey) { mutableStateOf(false) }
 
-    var timeLeft by remember(resetKey) {
-        mutableStateOf(questionTimeMillis / 1000)
-    }
+    var timeLeft by remember(resetKey) { mutableStateOf(questionTimeMillis / 1000) }
     var timerKey by remember(resetKey) { mutableStateOf(0) }
 
-
     val currentQuestion = shuffledQuizList.getOrNull(currentIndex)
-
 
     // Pre-fill answers if readOnly
     LaunchedEffect(currentIndex, readOnly) {
@@ -130,7 +140,6 @@ fun QuizViewerScreen(
                 currentQuestion.userAnswer = null
                 isAnswered = true
                 delay(1000)
-                // Move to next or finish
                 if (currentIndex < quizList.size - 1) {
                     currentIndex++
                     selectedAnswer = null
@@ -151,28 +160,29 @@ fun QuizViewerScreen(
             onFinish = onBack,
             onRetry = {
                 shuffledQuizList.forEach { it.userAnswer = null }
-                resetKey++   // 🔀 reshuffle + reset ALL state
+                resetKey++
             }
-
-
         )
-
-
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // TopAppBar
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF7F7F7)) // fixed background color
+    ) {
+        // ---------------- TopAppBar ----------------
         SmallTopAppBar(
-            title = { Text(title) },
+            title = { Text(title, color = Color.Black) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
                 }
             },
             colors = TopAppBarDefaults.smallTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                titleContentColor = MaterialTheme.colorScheme.onSurface
+                containerColor = Color.White,
+                titleContentColor = Color.Black,
+                navigationIconContentColor = Color.Black
             )
         )
 
@@ -183,7 +193,7 @@ fun QuizViewerScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Question header + progress + timer
+                // ---------------- Question header + progress ----------------
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -192,7 +202,10 @@ fun QuizViewerScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "Q${currentIndex + 1}/${quizList.size}",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
                         )
                         LinearProgressIndicator(
                             progress = ((currentIndex + 1) / quizList.size.toFloat()),
@@ -201,17 +214,15 @@ fun QuizViewerScreen(
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp)),
                             color = Color(0xFF6200EE),
-                            trackColor = Color.LightGray
+                            trackColor = Color(0xFFE0E0E0)
                         )
                     }
 
                     if (!readOnly) {
                         val timerFraction by animateFloatAsState(
                             targetValue = timeLeft.toFloat() / (questionTimeMillis / 1000),
-                            animationSpec = tween(1000),
-                            label = "timerProgress"
+                            animationSpec = tween(1000)
                         )
-
                         val timerColor = when {
                             timerFraction > 0.6f -> Color(0xFF4CAF50)
                             timerFraction > 0.3f -> Color(0xFFFFC107)
@@ -219,65 +230,57 @@ fun QuizViewerScreen(
                         }
 
                         Box(contentAlignment = Alignment.Center) {
-
                             CircularProgressIndicator(
                                 progress = timerFraction,
                                 strokeWidth = 6.dp,
                                 color = timerColor,
                                 modifier = Modifier.size(60.dp)
                             )
-
                             Text(
                                 text = "${timeLeft}s",
                                 fontWeight = FontWeight.Bold,
                                 color = timerColor
                             )
                         }
-
                     }
                 }
 
-                // Question Card
+                // ---------------- Question Card ----------------
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Text(
                         text = question.question,
                         modifier = Modifier.padding(24.dp),
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
                         )
-
                     )
                 }
 
-                // Options (with animation)
+                // ---------------- Options ----------------
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     question.options.forEach { option ->
-
                         val targetColor = when {
                             isAnswered && option == question.correctAnswer -> Color(0xFF4CAF50)
                             isAnswered && option == selectedAnswer && selectedAnswer != question.correctAnswer -> Color(0xFFF44336)
                             !isAnswered && option == selectedAnswer -> Color(0xFFBBDEFB)
-                            else -> MaterialTheme.colorScheme.surface
+                            else -> Color.White
                         }
 
                         val animatedBgColor by animateColorAsState(
                             targetValue = targetColor,
-                            animationSpec = tween(
-                                durationMillis = 180,
-                                easing = LinearOutSlowInEasing
-                            ),
-                            label = "optionColor"
+                            animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing)
                         )
-
 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(60.dp)
+                                .height(70.dp)
                                 .clickable(enabled = !isAnswered && !readOnly) {
                                     selectedAnswer = option
                                 },
@@ -291,27 +294,21 @@ fun QuizViewerScreen(
                             ) {
                                 Text(
                                     text = option,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = if (animatedBgColor == MaterialTheme.colorScheme.surface)
-                                        Color.Black else Color.White
+                                    color = if (animatedBgColor == Color.White) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
                     }
                 }
 
-
-                // Feedback
+                // ---------------- Feedback ----------------
                 AnimatedVisibility(
                     visible = isAnswered || readOnly,
-                    enter = fadeIn(tween(120)) + scaleIn(
-                        initialScale = 0.92f,
-                        animationSpec = tween(120)
-                    ),
+                    enter = fadeIn(tween(120)) + scaleIn(initialScale = 0.92f, animationSpec = tween(120)),
                     exit = fadeOut(tween(80))
                 ) {
-
-                Text(
+                    Text(
                         text = when {
                             selectedAnswer == question.correctAnswer -> "✅ Correct!"
                             selectedAnswer == null -> "⏰ Time's up! Correct: ${question.correctAnswer}"
@@ -322,14 +319,14 @@ fun QuizViewerScreen(
                             selectedAnswer == null -> Color.Gray
                             else -> Color(0xFFF44336)
                         },
-                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                // Submit / Next / Finish button
+                // ---------------- Submit / Next / Finish ----------------
                 Button(
                     onClick = {
                         if (!isAnswered) {
@@ -361,6 +358,7 @@ fun QuizViewerScreen(
     }
 }
 
+// -------------------- Score Screen --------------------
 @Composable
 fun QuizScoreScreen(
     score: Int,
@@ -376,46 +374,32 @@ fun QuizScoreScreen(
         mutableStateOf(if (showConfetti) generateConfetti() else emptyList())
     }
 
-    // Confetti animation (3 seconds)
     LaunchedEffect(showConfetti) {
         if (!showConfetti) return@LaunchedEffect
         val start = System.currentTimeMillis()
         while (System.currentTimeMillis() - start < 3000) {
-            confettiList = confettiList.map { c -> c.copy(y = c.y + c.speed) }
+            confettiList = confettiList.map { it.copy(y = it.y + it.speed) }
             delay(16)
         }
     }
 
-    // Trophy pulse animation
     val scale by animateFloatAsState(
         targetValue = if (isPerfect) 1.1f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "trophyPulse"
+        animationSpec = infiniteRepeatable(animation = tween(800), repeatMode = RepeatMode.Reverse)
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
-
-        // 🎉 Confetti
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F7F7))) {
         if (showConfetti) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                confettiList.forEach { c ->
-                    drawCircle(c.color, c.size, Offset(c.x, c.y))
-                }
+                confettiList.forEach { c -> drawCircle(c.color, c.size, Offset(c.x, c.y)) }
             }
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
+            modifier = Modifier.fillMaxSize().padding(32.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
-            // 🏆 Perfect score badge
             if (isPerfect) {
                 Box(
                     modifier = Modifier
@@ -425,7 +409,7 @@ fun QuizScoreScreen(
                         .graphicsLayer(scaleX = scale, scaleY = scale),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("🏆", fontSize = MaterialTheme.typography.headlineLarge.fontSize)
+                    Text("🏆", fontSize = 36.sp)
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -436,67 +420,45 @@ fun QuizScoreScreen(
                     percentage >= 0.7f -> "Great job!"
                     else -> "Keep practicing!"
                 },
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                fontSize = 24.sp
             )
 
             Spacer(Modifier.height(16.dp))
-
-            Text("Your Score", style = MaterialTheme.typography.titleLarge)
-
+            Text("Your Score", color = Color.Black, fontSize = 20.sp)
             Text(
                 "$score / $total",
-                style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
+                fontSize = 36.sp,
                 color = when {
                     isPerfect -> Color(0xFF4CAF50)
                     percentage >= 0.7f -> Color(0xFF6200EE)
                     else -> Color.Gray
                 }
             )
-
-            Text(
-                "${(percentage * 100).toInt()}%",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Text("${(percentage * 100).toInt()}%", color = Color.Black, fontSize = 20.sp)
 
             Spacer(Modifier.height(32.dp))
 
-            // 🔁 Retry button
             if (onRetry != null) {
-                OutlinedButton(
-                    onClick = onRetry,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Retry Quiz")
-                }
+                OutlinedButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("Retry Quiz") }
                 Spacer(Modifier.height(12.dp))
             }
 
-            Button(
-                onClick = onFinish,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Back to Home")
-            }
+            Button(onClick = onFinish, modifier = Modifier.fillMaxWidth()) { Text("Back to Home") }
         }
     }
 }
 
-data class Confetti(
-    val x: Float,
-    val y: Float,
-    val size: Float,
-    val color: Color,
-    val speed: Float
-)
-
+// -------------------- Confetti --------------------
+data class Confetti(val x: Float, val y: Float, val size: Float, val color: Color, val speed: Float)
 fun generateConfetti(): List<Confetti> {
     val colors = listOf(Color.Red, Color.Green, Color.Blue, Color.Yellow, Color.Magenta, Color.Cyan)
     return List(100) {
         Confetti(
-            x = Random.nextFloat() * 1080f,  // screen width approximation
-            y = Random.nextFloat() * 1920f,  // screen height approximation
+            x = Random.nextFloat() * 1080f,
+            y = Random.nextFloat() * 1920f,
             size = Random.nextFloat() * 12 + 4,
             color = colors.random(),
             speed = Random.nextFloat() * 8 + 2
@@ -504,7 +466,7 @@ fun generateConfetti(): List<Confetti> {
     }
 }
 
-// Save to Firebase
+// -------------------- Firebase --------------------
 private fun saveQuizToHistory(quizList: List<QuizQuestion>, inputText: String) {
     val user = FirebaseAuth.getInstance().currentUser ?: return
     val firestore = FirebaseFirestore.getInstance()

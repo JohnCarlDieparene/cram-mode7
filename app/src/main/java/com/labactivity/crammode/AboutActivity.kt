@@ -45,64 +45,89 @@ fun AboutScreen(onBack: () -> Unit) {
                     }
                 }
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
 
             // ---------------- LOGO ----------------
-            Image(
-                painter = painterResource(id = R.drawable.lojo),
-                contentDescription = "Cram Mode Logo",
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(RoundedCornerShape(24.dp)),
-                contentScale = ContentScale.Crop
-            )
+            Card(
+                shape = RoundedCornerShape(32.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.lojo),
+                    contentDescription = "Cram Mode Logo",
+                    modifier = Modifier
+                        .size(140.dp)
+                        .clip(RoundedCornerShape(32.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             // ---------------- APP NAME ----------------
-            Text(
-                text = "Cram Mode",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Text(
-                text = "Study Smart. Learn Fast.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Cram Mode",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Learn Efficiently. Recall Effectively.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
 
             // ---------------- DESCRIPTION ----------------
-            Text(
-                text = """
-Cram Mode is an AI-powered study application designed to help students review efficiently during last-minute exam preparation.
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = """
+Cram Mode is a mobile-based digital study tool developed to enhance last-minute exam preparation by providing structured, intelligent, and AI-assisted review features.
 
-It provides smart summaries, AI-generated flashcards, and interactive quizzes to support active recall and improve learning retention.
+The app allows students to generate concise AI-powered summaries from scanned notes, uploaded files, or text inputs, and automatically creates flashcards and quizzes to reinforce active recall and improve memory retention.
 
-By combining OCR technology, adaptive learning, and intelligent feedback, Cram Mode aims to make studying faster, more focused, and more effective.
-                """.trimIndent(),
-                style = MaterialTheme.typography.bodyMedium,
-                lineHeight = 20.sp
-            )
+It integrates OCR technology for text extraction, supports Tagalog translation for accessibility, and leverages Jetpack Compose for a responsive and user-friendly interface.
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+By focusing on efficient, time-sensitive review sessions, Cram Mode helps students study smart, learn faster, and reduce exam-related stress.
+""".trimIndent(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 22.sp
+                    )
+                }
+            }
 
             // ---------------- APP INFO ----------------
-            InfoRow(label = "Version", value = "1.0")
-            InfoRow(label = "Developer", value = "Cram Mode Team")
-            InfoRow(label = "Platform", value = "Android")
-            InfoRow(label = "Year", value = "2026")
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    InfoRow(label = "Version", value = "1.0")
+                    InfoRow(label = "Developer", value = "Cram Mode Team")
+                    InfoRow(label = "Platform", value = "Android")
+                    InfoRow(label = "Year", value = "2026")
+                }
+            }
+
         }
     }
 }
@@ -117,3 +142,4 @@ fun InfoRow(label: String, value: String) {
         Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
